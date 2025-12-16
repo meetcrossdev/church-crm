@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, MapPin, Clock, Plus, X, Users, ArrowRight } from 'lucide-react';
+import { MapPin, Clock, Plus, X, Users, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { storage } from '../services/storageService';
 import { Event, EventType } from '../types';
