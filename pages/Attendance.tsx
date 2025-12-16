@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardCheck, Calendar, Users, Search, X, CheckSquare, User, Filter } from 'lucide-react';
+import { ClipboardCheck, Calendar, Users, Search, X, CheckSquare } from 'lucide-react';
 import { storage } from '../services/storageService';
 import { Event, Member, MemberStatus } from '../types';
 
@@ -18,11 +18,6 @@ export const Attendance: React.FC = () => {
   const getAttendanceCount = (event: Event) => {
       // Prioritize explicit attendee list, fallback to simple count
       return event.attendeeIds ? event.attendeeIds.length : (event.attendanceCount || 0);
-  };
-
-  const getEventName = (id: string) => {
-      const e = events.find(ev => ev.id === id);
-      return e ? `${e.title} (${new Date(e.date).toLocaleDateString()})` : '';
   };
 
   // Handlers
