@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Download, DollarSign, Calendar } from 'lucide-react';
+import { Plus, Download, DollarSign } from 'lucide-react';
 import { storage } from '../services/storageService';
 import { Donation, FundType, Member } from '../types';
 
