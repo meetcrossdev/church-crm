@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
@@ -32,9 +31,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   useEffect(() => {
     let isMounted = true;
+
     const fetchSettings = async () => {
       try {
-        const data = await storage.getSettings();
+        const data: ChurchSettings = await storage.getSettings(); // Await Promise properly
         if (isMounted) {
           setSettings(data);
         }
@@ -42,7 +42,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
         console.error("Failed to fetch settings", error);
       }
     };
+
     fetchSettings();
+
     return () => { isMounted = false; };
   }, [location.pathname]);
 
@@ -168,4 +170,5 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     </div>
   );
 };
+
 
