@@ -21,16 +21,14 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     try {
       const response = await storage.login(email, password);
-      const authError = response.error;
-      const authData = response.data;
       
-      if (authError) {
-        setError(authError.message);
+      if (response.error) {
+        setError(response.error.message);
         setLoading(false);
         return;
       }
 
-      if (authData.user) {
+      if (response.data.user) {
         // Fetch the detailed profile from the 'profiles' table after successful auth
         const userProfile = await storage.getCurrentUser();
         if (userProfile) {
@@ -48,7 +46,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleForgotSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      alert("Password reset requires Supabase SMTP configuration. Check your email (simulated).");
+      alert("Password reset functionality is being developed. Check back soon.");
       setShowForgot(false);
   };
 
