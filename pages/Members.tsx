@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Search, Filter, Edit2, Trash2, X, Upload } from 'lucide-react';
 import { storage } from '../services/storageService';
@@ -131,7 +132,7 @@ export const Members: React.FC = () => {
           <input 
             type="text" 
             placeholder="Search by name, email..."
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -139,7 +140,7 @@ export const Members: React.FC = () => {
         <div className="flex items-center gap-2">
           <Filter size={20} className="text-slate-400" />
           <select 
-            className="border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            className="border border-slate-200 rounded-lg px-4 py-2 focus:outline-none bg-white"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -305,3 +306,4 @@ export const Members: React.FC = () => {
     </div>
   );
 };
+
