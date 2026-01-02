@@ -20,7 +20,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      // Supabase login
+      // Login and get the auth response
       const authResponse = await storage.login(email, password);
 
       if (authResponse.error) {
@@ -29,27 +29,16 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         return;
       }
 
-      if (authResponse.data.user) {
-        // Fetch full user profile from storage or Supabase
-        const userProfile = await storage.getCurrentUser();
-
-        if (userProfile) {
-          // Map to your app User type
-          const mappedUser: User = {
-            id: userProfile.id,
-            name: userProfile.name || userProfile.email || 'Unknown',
-            email: userProfile.email || '',
-            avatar: userProfile.avatar || '',
-            role: userProfile.role || 'user',
-          };
-          onLogin(mappedUser);
-        } else {
-          setError('Authentication successful, but profile record was not found.');
-        }
+      // Get the actual user profile
+      const userProfile: User | null = await storage.getCurrentUser();
+      if (userProfile) {
+        onLogin(userProfile); // ✅ Pass the User object
+      } else {
+        setError('Authentication successful, but profile record was not found.');
+        setLoading(false);
       }
     } catch (err: any) {
-      setError(err?.message || 'An unexpected error occurred during sign in.');
-    } finally {
+      setError(err.message || 'An unexpected error occurred during sign in.');
       setLoading(false);
     }
   };
@@ -143,5 +132,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     </div>
   );
 };
+
 
 
