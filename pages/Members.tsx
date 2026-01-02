@@ -12,7 +12,8 @@ export const Members: React.FC = () => {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(undefined);
 
-  const loadMembers = async () => {
+  const loadMembersData = async () => {
+    setLoading(true);
     try {
       const data = await storage.getMembers();
       setMembers(data);
@@ -24,7 +25,7 @@ export const Members: React.FC = () => {
   };
 
   useEffect(() => {
-    loadMembers();
+    loadMembersData();
   }, []);
 
   const filteredMembers = useMemo(() => {
@@ -42,8 +43,13 @@ export const Members: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to remove this member?')) {
-      await storage.deleteMember(id);
-      loadMembers();
+      try {
+        await storage.deleteMember(id);
+        await loadMembersData();
+      } catch (error) {
+        console.error("Failed to delete member", error);
+        alert("Error deleting member.");
+      }
     }
   };
 
@@ -77,11 +83,16 @@ export const Members: React.FC = () => {
       familyId: editingMember?.familyId
     };
 
-    await storage.saveMember(newMember);
-    await loadMembers();
-    setIsModalOpen(false);
-    setEditingMember(null);
-    setPhotoPreview(undefined);
+    try {
+      await storage.saveMember(newMember);
+      await loadMembersData();
+      setIsModalOpen(false);
+      setEditingMember(null);
+      setPhotoPreview(undefined);
+    } catch (error) {
+      console.error("Failed to save member", error);
+      alert("Error saving member details.");
+    }
   };
 
   const openModal = (member?: Member) => {
