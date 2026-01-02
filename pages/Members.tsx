@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Search, Filter, Edit2, Trash2, X, Upload } from 'lucide-react';
 import { storage } from '../services/storageService';
@@ -13,10 +12,11 @@ export const Members: React.FC = () => {
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | undefined>(undefined);
 
+  // Load members from storage
   const loadMembersData = async () => {
     setLoading(true);
     try {
-      const data = await storage.getMembers();
+      const data: Member[] = await storage.getMembers(); // Await the promise
       setMembers(data);
     } catch (error) {
       console.error("Failed to fetch members", error);
@@ -31,13 +31,13 @@ export const Members: React.FC = () => {
 
   const filteredMembers = useMemo(() => {
     return members.filter(member => {
-      const matchesSearch = 
+      const matchesSearch =
         member.firstName.toLowerCase().includes(search.toLowerCase()) ||
         member.lastName.toLowerCase().includes(search.toLowerCase()) ||
         member.email.toLowerCase().includes(search.toLowerCase());
-      
+
       const matchesStatus = statusFilter === 'All' || member.status === statusFilter;
-      
+
       return matchesSearch && matchesStatus;
     });
   }, [members, search, statusFilter]);
@@ -55,19 +55,18 @@ export const Members: React.FC = () => {
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-              setPhotoPreview(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-      }
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setPhotoPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+
     const newMember: Member = {
       id: editingMember?.id || '',
       firstName: formData.get('firstName') as string,
@@ -78,10 +77,15 @@ export const Members: React.FC = () => {
       status: formData.get('status') as MemberStatus,
       birthDate: formData.get('birthDate') as string,
       address: formData.get('address') as string,
-      photoUrl: photoPreview || editingMember?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.get('firstName') as string)}&background=random`,
+      photoUrl:
+        photoPreview ||
+        editingMember?.photoUrl ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(
+          formData.get('firstName') as string
+        )}&background=random`,
       baptismDate: (formData.get('baptismDate') as string) || undefined,
       notes: (formData.get('notes') as string) || undefined,
-      familyId: editingMember?.familyId
+      familyId: editingMember?.familyId,
     };
 
     try {
@@ -112,12 +116,13 @@ export const Members: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Members</h1>
           <p className="text-slate-500">Manage your church directory</p>
         </div>
-        <button 
+        <button
           onClick={() => openModal()}
           className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
         >
@@ -126,11 +131,12 @@ export const Members: React.FC = () => {
         </button>
       </div>
 
+      {/* Search & Filter */}
       <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Search by name, email..."
             className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none"
             value={search}
@@ -139,7 +145,7 @@ export const Members: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <Filter size={20} className="text-slate-400" />
-          <select 
+          <select
             className="border border-slate-200 rounded-lg px-4 py-2 focus:outline-none bg-white"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -152,6 +158,7 @@ export const Members: React.FC = () => {
         </div>
       </div>
 
+      {/* Members Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -169,7 +176,14 @@ export const Members: React.FC = () => {
                 <tr key={member.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center">
-                      <img src={member.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.firstName)}&background=random`} alt="" className="w-10 h-10 rounded-full object-cover" />
+                      <img
+                        src={
+                          member.photoUrl ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(member.firstName)}&background=random`
+                        }
+                        alt=""
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
                       <div className="ml-3">
                         <p className="font-medium text-slate-900">{member.firstName} {member.lastName}</p>
                         <p className="text-xs text-slate-500">{member.gender}</p>
@@ -181,9 +195,15 @@ export const Members: React.FC = () => {
                     <p className="text-xs text-slate-500">{member.phone}</p>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                      ${member.status === MemberStatus.ACTIVE ? 'bg-green-100 text-green-700' : 
-                        member.status === MemberStatus.VISITOR ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        member.status === MemberStatus.ACTIVE
+                          ? 'bg-green-100 text-green-700'
+                          : member.status === MemberStatus.VISITOR
+                          ? 'bg-blue-100 text-blue-700'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
                       {member.status}
                     </span>
                   </td>
@@ -192,13 +212,13 @@ export const Members: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
-                      <button 
+                      <button
                         onClick={() => openModal(member)}
                         className="p-1 text-slate-400 hover:text-indigo-600 transition-colors"
                       >
                         <Edit2 size={16} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDelete(member.id)}
                         className="p-1 text-slate-400 hover:text-red-600 transition-colors"
                       >
@@ -213,6 +233,7 @@ export const Members: React.FC = () => {
         </div>
       </div>
 
+      {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden my-8">
@@ -225,20 +246,22 @@ export const Members: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSave} className="p-6 space-y-4">
+              {/* Photo Upload */}
               <div className="flex justify-center mb-4">
-                  <div className="relative">
-                      <img 
-                        src={photoPreview || "https://via.placeholder.com/100"} 
-                        className="w-24 h-24 rounded-full object-cover border-2 border-slate-200"
-                        alt="Preview"
-                      />
-                      <label className="absolute bottom-0 right-0 bg-indigo-600 text-white p-1.5 rounded-full cursor-pointer hover:bg-indigo-700 shadow-sm">
-                          <Upload size={14} />
-                          <input type="file" className="hidden" accept="image/*" onChange={handlePhotoChange} />
-                      </label>
-                  </div>
+                <div className="relative">
+                  <img
+                    src={photoPreview || "https://via.placeholder.com/100"}
+                    className="w-24 h-24 rounded-full object-cover border-2 border-slate-200"
+                    alt="Preview"
+                  />
+                  <label className="absolute bottom-0 right-0 bg-indigo-600 text-white p-1.5 rounded-full cursor-pointer hover:bg-indigo-700 shadow-sm">
+                    <Upload size={14} />
+                    <input type="file" className="hidden" accept="image/*" onChange={handlePhotoChange} />
+                  </label>
+                </div>
               </div>
 
+              {/* Form Fields */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">First Name</label>
@@ -249,7 +272,7 @@ export const Members: React.FC = () => {
                   <input required name="lastName" defaultValue={editingMember?.lastName} type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500" />
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
@@ -270,8 +293,8 @@ export const Members: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Birth Date</label>
-                   <input required name="birthDate" defaultValue={editingMember?.birthDate} type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500" />
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Birth Date</label>
+                  <input required name="birthDate" defaultValue={editingMember?.birthDate} type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500" />
                 </div>
               </div>
 
@@ -285,8 +308,8 @@ export const Members: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Baptism Date</label>
-                   <input name="baptismDate" defaultValue={editingMember?.baptismDate} type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500" />
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Baptism Date</label>
+                  <input name="baptismDate" defaultValue={editingMember?.baptismDate} type="date" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500" />
                 </div>
               </div>
 
@@ -295,15 +318,6 @@ export const Members: React.FC = () => {
                 <textarea required name="address" defaultValue={editingMember?.address} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500" />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Save Member</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+              <div className="flex justify-end gap-
+
 
