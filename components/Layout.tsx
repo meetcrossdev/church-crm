@@ -30,21 +30,29 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const location = useLocation();
 
   useEffect(() => {
+    let isMounted = true;
     const fetchSettings = async () => {
       try {
         const data = await storage.getSettings();
-        setSettings(data);
+        if (isMounted) {
+          setSettings(data);
+        }
       } catch (error) {
         console.error("Failed to fetch settings", error);
       }
     };
     fetchSettings();
-  }, [location]);
+    return () => { isMounted = false; };
+  }, [location.pathname]);
 
   const handleLogout = async () => {
-    await storage.logout();
-    onLogout();
-    navigate('/');
+    try {
+      await storage.logout();
+      onLogout();
+      navigate('/');
+    } catch (error) {
+      console.error("Logout failed", error);
+    }
   };
 
   const navItems = [
