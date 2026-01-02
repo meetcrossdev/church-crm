@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Church, AlertCircle } from 'lucide-react';
 import { storage } from '../services/storageService';
@@ -20,16 +21,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      const response = await storage.login(email, password);
+      const authResponse = await storage.login(email, password);
       
-      if (response.error) {
-        setError(response.error.message);
+      if (authResponse.error) {
+        setError(authResponse.error.message);
         setLoading(false);
         return;
       }
 
-      if (response.data.user) {
-        // Fetch the detailed profile from the 'profiles' table after successful auth
+      if (authResponse.data.user) {
         const userProfile = await storage.getCurrentUser();
         if (userProfile) {
           onLogin(userProfile);
@@ -46,7 +46,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleForgotSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      alert("Password reset functionality is being developed. Check back soon.");
+      alert("Password reset functionality is being developed.");
       setShowForgot(false);
   };
 
@@ -133,3 +133,4 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     </div>
   );
 };
+
