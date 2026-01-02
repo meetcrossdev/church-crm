@@ -13,17 +13,35 @@ import { Login } from './pages/Login';
 import { storage } from './services/storageService';
 import { User } from './types';
 import { supabase } from './services/supabase';
+import { AlertTriangle } from 'lucide-react';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check if Supabase is actually configured
+    // Fixed: Cast import.meta to any to resolve TypeScript 'Property env does not exist on type ImportMeta' error
+    const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
+    const supabaseKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      setConfigError("Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment variables.");
+      setLoading(false);
+      return;
+    }
+
     // Check initial session
     const checkUser = async () => {
-      const currentUser = await storage.getCurrentUser();
-      setUser(currentUser);
-      setLoading(false);
+      try {
+        const currentUser = await storage.getCurrentUser();
+        setUser(currentUser);
+      } catch (err) {
+        console.error("Failed to fetch current user:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     checkUser();
@@ -40,6 +58,25 @@ function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  if (configError) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border border-red-100">
+          <AlertTriangle className="mx-auto h-16 w-16 text-red-500 mb-4" />
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Configuration Error</h1>
+          <p className="text-slate-600 mb-6">{configError}</p>
+          <div className="text-sm bg-slate-50 p-4 rounded-lg text-left text-slate-500 font-mono overflow-auto">
+            1. Go to Vercel Project Settings<br/>
+            2. Environment Variables<br/>
+            3. Add VITE_SUPABASE_URL<br/>
+            4. Add VITE_SUPABASE_ANON_KEY<br/>
+            5. Re-deploy the project
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
      return (
