@@ -1,11 +1,17 @@
+
 import { createClient } from '@supabase/supabase-js';
 
-// Accessing environment variables via process.env which is the standard in this environment
-const supabaseUrl = (process.env.VITE_SUPABASE_URL as string) || '';
-const supabaseAnonKey = (process.env.VITE_SUPABASE_ANON_KEY as string) || '';
+// Helper to get environment variables from either process.env or import.meta.env
+const getEnv = (key: string): string => {
+  const env = (import.meta as any).env;
+  return (process.env?.[key] || env?.[key]) || '';
+};
+
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Supabase credentials missing in process.env! Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your environment.");
+  console.error("Supabase configuration missing! Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in environment variables.");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
