@@ -1,6 +1,5 @@
 
-import { useState, useEffect } from 'react';
-// Split imports between core react-router and web-specific react-router-dom
+import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router';
 import { HashRouter } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -22,44 +21,65 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
+  const isInitialized = useRef(false);
 
   useEffect(() => {
-    // Check if Supabase is actually configured
-    // Fixed: Cast import.meta to any to resolve TypeScript 'Property env does not exist on type ImportMeta' error
-    const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
-    const supabaseKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
+    // 1. Config Check
+    const meta = import.meta as any;
+    const supabaseUrl = meta.env?.VITE_SUPABASE_URL;
+    const supabaseKey = meta.env?.VITE_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      setConfigError("Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment variables.");
+      setConfigError("Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
       setLoading(false);
       return;
     }
 
-    // Check initial session
-    const checkUser = async () => {
+    // 2. Safety Fallback: Ensure loading screen eventually disappears
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("Auth initialization taking too long, forcing load finish.");
+        setLoading(false);
+      }
+    }, 5000);
+
+    // 3. Auth Listener & Initial Check
+    const initAuth = async () => {
+      if (isInitialized.current) return;
+      
       try {
-        const currentUser = await storage.getCurrentUser();
-        setUser(currentUser);
+        // Get current session status immediately
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const profile = await storage.getCurrentUser();
+          setUser(profile);
+        }
       } catch (err) {
-        console.error("Failed to fetch current user:", err);
+        console.error("Auth init error:", err);
       } finally {
         setLoading(false);
+        isInitialized.current = true;
       }
     };
 
-    checkUser();
+    initAuth();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen for state changes (Login, Logout, Session Refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`Auth Event: ${event}`);
       if (session) {
-        const currentUser = await storage.getCurrentUser();
-        setUser(currentUser);
+        const profile = await storage.getCurrentUser();
+        setUser(profile);
       } else {
         setUser(null);
       }
+      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (configError) {
@@ -69,13 +89,6 @@ function App() {
           <AlertTriangle className="mx-auto h-16 w-16 text-red-500 mb-4" />
           <h1 className="text-xl font-bold text-slate-900 mb-2">Configuration Error</h1>
           <p className="text-slate-600 mb-6">{configError}</p>
-          <div className="text-sm bg-slate-50 p-4 rounded-lg text-left text-slate-500 font-mono overflow-auto">
-            1. Go to Vercel Project Settings<br/>
-            2. Environment Variables<br/>
-            3. Add VITE_SUPABASE_URL<br/>
-            4. Add VITE_SUPABASE_ANON_KEY<br/>
-            5. Re-deploy the project
-          </div>
         </div>
       </div>
     );
@@ -85,7 +98,7 @@ function App() {
      return (
         <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50">
             <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-500 font-medium">Connecting to Meetcross Cloud...</p>
+            <p className="text-slate-500 font-medium animate-pulse">Connecting to Meetcross Cloud...</p>
         </div>
      );
   }
@@ -114,3 +127,4 @@ function App() {
 }
 
 export default App;
+
