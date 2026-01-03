@@ -17,27 +17,23 @@ export const storage = {
   async getCurrentUser(): Promise<User | null> {
     try {
       const { data: authData, error: authError } = await supabase.auth.getUser();
-      if (authError) {
-        logError('getCurrentUser_auth', authError);
+      if (authError || !authData?.user) {
         return null;
       }
       
-      const user = authData?.user;
-      if (!user) return null;
-      
-      const { data: profile, error } = await supabase
+      const user = authData.user;
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .maybeSingle();
       
-      if (error) {
-        logError('getCurrentUser_profile', error);
+      if (profileError) {
+        logError('getCurrentUser_profile', profileError);
         return null;
       }
 
       if (!profile) {
-          console.warn("User authenticated but no record found in 'profiles' table.");
           return {
               id: user.id,
               name: user.email?.split('@')[0] || 'User',
@@ -49,7 +45,7 @@ export const storage = {
         
       return profile as User;
     } catch (e) {
-      console.error("Critical failure in getCurrentUser:", e);
+      console.error("Auth context failure:", e);
       return null;
     }
   },
@@ -71,8 +67,8 @@ export const storage = {
       .from('profiles')
       .insert({
         id: data.user.id,
-        name,
-        email,
+        name: name,
+        email: email,
         role: UserRole.ADMIN,
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
       });
@@ -100,17 +96,14 @@ export const storage = {
   },
 
   async saveMember(member: Member): Promise<Member> {
-    // Clean payload for Supabase
-    const payload = { ...member };
+    const memberId = member.id;
+    const payload: any = { ...member };
     
-    // UUIDs must be valid or absent. Empty strings will cause a database error.
-    if (!payload.id || payload.id === '' || payload.id.length < 10) {
-      delete (payload as any).id;
+    // UUIDs must be valid. If it looks like a new entry (placeholder or empty), remove it to let Supabase generate one.
+    if (!memberId || memberId === '' || memberId.length < 10) {
+      delete payload.id;
     }
     
-    // Ensure all required fields match database names exactly
-    console.log("Saving member payload:", payload);
-
     const { data, error } = await supabase
       .from('members')
       .upsert(payload)
@@ -143,9 +136,9 @@ export const storage = {
   },
 
   async saveFamily(family: Family): Promise<Family> {
-    const payload = { ...family };
+    const payload: any = { ...family };
     if (!payload.id || payload.id === '') {
-      delete (payload as any).id;
+      delete payload.id;
     }
 
     const { data, error } = await supabase
@@ -179,9 +172,9 @@ export const storage = {
   },
 
   async saveEvent(event: Event): Promise<Event> {
-    const payload = { ...event };
+    const payload: any = { ...event };
     if (!payload.id || payload.id === '') {
-      delete (payload as any).id;
+      delete payload.id;
     }
 
     const { data, error } = await supabase
@@ -261,9 +254,9 @@ export const storage = {
   },
 
   async saveAnnouncement(announcement: Announcement): Promise<Announcement> {
-    const payload = { ...announcement };
+    const payload: any = { ...announcement };
     if (!payload.id || payload.id === '') {
-      delete (payload as any).id;
+      delete payload.id;
     }
 
     const { data, error } = await supabase
