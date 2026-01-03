@@ -17,41 +17,43 @@ import { User } from './types';
 import { supabase } from './services/supabase';
 import { AlertTriangle } from 'lucide-react';
 
+/* 
+ * MAIN APPLICATION COMPONENT
+ * Handles global authentication state and routing.
+ */
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
-  const isInitStarted = useRef(false);
+  const initializationOccurred = useRef(false);
 
   useEffect(() => {
-    // 1. Config Check
-    const getEnv = (key: string): string => {
-      const env = (import.meta as any).env;
-      return (process.env?.[key] || env?.[key]) || '';
+    /* Step 1: Validate Environment Configuration */
+    const checkConfig = () => {
+      const viteEnv = (import.meta as any).env;
+      const url = process.env?.VITE_SUPABASE_URL || viteEnv?.VITE_SUPABASE_URL;
+      const key = process.env?.VITE_SUPABASE_ANON_KEY || viteEnv?.VITE_SUPABASE_ANON_KEY;
+
+      if (!url || !key) {
+        setConfigError('Missing Supabase credentials in environment variables.');
+        return false;
+      }
+      return true;
     };
 
-    const supabaseUrl = getEnv('VITE_SUPABASE_URL');
-    const supabaseKey = getEnv('VITE_SUPABASE_ANON_KEY');
-
-    if (!supabaseUrl || !supabaseKey) {
-      setConfigError("Missing Supabase configuration. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.");
+    if (!checkConfig()) {
       setLoading(false);
       return;
     }
 
-    // 2. Auth Initialization Logic
-    const initAuth = async () => {
-      if (isInitStarted.current) return;
-      isInitStarted.current = true;
+    /* Step 2: Initialize Session */
+    const performInitialAuth = async () => {
+      if (initializationOccurred.current) return;
+      initializationOccurred.current = true;
       
       try {
-        // Step A: Check session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error("Session error:", sessionError);
-        }
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           const profile = await storage.getCurrentUser();
           if (profile) {
@@ -59,18 +61,16 @@ function App() {
           }
         }
       } catch (err) {
-        console.error("Critical Auth Init Error:", err);
+        console.error('Auth initialization failure:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    initAuth();
+    performInitialAuth();
 
-    // 3. Listen for state changes
+    /* Step 3: Listen for Auth State Changes */
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`Supabase Event: ${event}`);
-      
       if (session?.user) {
         const profile = await storage.getCurrentUser();
         setUser(profile);
@@ -80,42 +80,46 @@ function App() {
       setLoading(false);
     });
 
-    // 4. Safety Fallback: Don't hang forever (3 seconds is enough for most connections)
-    const timer = setTimeout(() => {
+    /* Step 4: Safety Timeout */
+    const safetyTimer = setTimeout(() => {
       setLoading(false);
-    }, 3500);
+    }, 5000);
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
   }, []);
 
+  /* Error State Rendering */
   if (configError) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center">
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-red-50 p-6 text-center">
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border border-red-100">
           <AlertTriangle className="mx-auto h-16 w-16 text-red-500 mb-4" />
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Configuration Error</h1>
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Setup Required</h1>
           <p className="text-slate-600 mb-6">{configError}</p>
         </div>
       </div>
     );
   }
 
+  /* Loading State Rendering */
   if (loading) {
      return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-50">
             <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
             <p className="text-slate-500 font-medium">Connecting to Meetcross Cloud...</p>
         </div>
      );
   }
 
+  /* Login State Rendering */
   if (!user) {
     return <Login onLogin={setUser} />;
   }
 
+  /* Authenticated App Rendering */
   return (
     <HashRouter>
       <Layout user={user} onLogout={() => setUser(null)}>
