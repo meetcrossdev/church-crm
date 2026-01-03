@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { MapPin, Clock, Plus, X, Users, ArrowRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+// Import hooks from core react-router
+import { useNavigate } from 'react-router';
 import { storage } from '../services/storageService';
 import { Event, EventType } from '../types';
 
