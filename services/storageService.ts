@@ -1,131 +1,324 @@
 
-import { useState, useEffect, useRef } from 'react';
-import { Routes, Route, Navigate } from 'react-router';
-import { HashRouter } from 'react-router-dom';
-import { Layout } from './components/Layout';
-import { Dashboard } from './pages/Dashboard';
-import { Members } from './pages/Members';
-import { Families } from './pages/Families';
-import { Giving } from './pages/Giving';
-import { Events } from './pages/Events';
-import { Attendance } from './pages/Attendance';
-import { Settings } from './pages/Settings';
-import { Announcements } from './pages/Announcements';
-import { Login } from './pages/Login';
-import { storage } from './services/storageService';
-import { User } from './types';
-import { supabase } from './services/supabase';
-import { AlertTriangle } from 'lucide-react';
+import { supabase } from './supabase';
+import { Member, Family, Event, Donation, User, ChurchSettings, Announcement, UserRole } from '../types';
 
-function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [configError, setConfigError] = useState<string | null>(null);
-  const isInitialized = useRef(false);
+const logError = (context: string, error: any) => {
+  console.error(`Supabase Error Detailed [${context}]:`, {
+    message: error?.message || 'No message',
+    code: error?.code || 'No code',
+    details: error?.details || 'No details',
+    hint: error?.hint || 'No hint',
+    fullError: error
+  });
+};
 
-  useEffect(() => {
-    // 1. Config Check
-    const meta = import.meta as any;
-    const supabaseUrl = meta.env?.VITE_SUPABASE_URL;
-    const supabaseKey = meta.env?.VITE_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      setConfigError("Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-      setLoading(false);
-      return;
-    }
-
-    // 2. Safety Fallback: Ensure loading screen eventually disappears
-    const timeout = setTimeout(() => {
-      if (loading) {
-        console.warn("Auth initialization taking too long, forcing load finish.");
-        setLoading(false);
+export const storage = {
+  // Auth
+  async getCurrentUser(): Promise<User | null> {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        logError('getCurrentUser_auth', authError);
+        return null;
       }
-    }, 5000);
-
-    // 3. Auth Listener & Initial Check
-    const initAuth = async () => {
-      if (isInitialized.current) return;
       
-      try {
-        // Get current session status immediately
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const profile = await storage.getCurrentUser();
-          setUser(profile);
-        }
-      } catch (err) {
-        console.error("Auth init error:", err);
-      } finally {
-        setLoading(false);
-        isInitialized.current = true;
+      const user = authData?.user;
+      if (!user) return null;
+      
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      if (error) {
+        logError('getCurrentUser_profile', error);
+        return null;
       }
-    };
 
-    initAuth();
-
-    // Listen for state changes (Login, Logout, Session Refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`Auth Event: ${event}`);
-      if (session) {
-        const profile = await storage.getCurrentUser();
-        setUser(profile);
-      } else {
-        setUser(null);
+      if (!profile) {
+          console.warn("User authenticated but no record found in 'profiles' table.");
+          return {
+              id: user.id,
+              name: user.email?.split('@')[0] || 'User',
+              email: user.email || '',
+              role: UserRole.STAFF,
+              avatar: `https://ui-avatars.com/api/?name=${user.email}&background=random`
+          };
       }
-      setLoading(false);
+        
+      return profile as User;
+    } catch (e) {
+      console.error("Critical failure in getCurrentUser:", e);
+      return null;
+    }
+  },
+
+  async login(email: string, pass: string) {
+    return await supabase.auth.signInWithPassword({ email, password: pass });
+  },
+
+  async register(email: string, pass: string, name: string) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: pass,
     });
 
-    return () => {
-      clearTimeout(timeout);
-      subscription.unsubscribe();
-    };
-  }, []);
+    if (error) throw error;
+    if (!data.user) throw new Error("Sign up failed");
 
-  if (configError) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border border-red-100">
-          <AlertTriangle className="mx-auto h-16 w-16 text-red-500 mb-4" />
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Configuration Error</h1>
-          <p className="text-slate-600 mb-6">{configError}</p>
-        </div>
-      </div>
-    );
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: data.user.id,
+        name,
+        email,
+        role: UserRole.ADMIN,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+      });
+
+    if (profileError) {
+      logError('register_profile', profileError);
+      throw profileError;
+    }
+
+    return data;
+  },
+
+  async logout(): Promise<void> {
+    await supabase.auth.signOut();
+  },
+
+  // Members
+  async getMembers(): Promise<Member[]> {
+    const { data, error } = await supabase.from('members').select('*').order('lastName');
+    if (error) {
+      logError('getMembers', error);
+      throw error;
+    }
+    return (data || []) as Member[];
+  },
+
+  async saveMember(member: Member): Promise<Member> {
+    // Clean payload for Supabase
+    const payload = { ...member };
+    
+    // UUIDs must be valid or absent. Empty strings will cause a database error.
+    if (!payload.id || payload.id === '' || payload.id.length < 10) {
+      delete (payload as any).id;
+    }
+    
+    // Ensure all required fields match database names exactly
+    console.log("Saving member payload:", payload);
+
+    const { data, error } = await supabase
+      .from('members')
+      .upsert(payload)
+      .select()
+      .single();
+      
+    if (error) {
+      logError('saveMember', error);
+      throw error;
+    }
+    return data as Member;
+  },
+
+  async deleteMember(id: string): Promise<void> {
+    const { error } = await supabase.from('members').delete().eq('id', id);
+    if (error) {
+      logError('deleteMember', error);
+      throw error;
+    }
+  },
+
+  // Families
+  async getFamilies(): Promise<Family[]> {
+    const { data, error } = await supabase.from('families').select('*');
+    if (error) {
+      logError('getFamilies', error);
+      throw error;
+    }
+    return (data || []) as Family[];
+  },
+
+  async saveFamily(family: Family): Promise<Family> {
+    const payload = { ...family };
+    if (!payload.id || payload.id === '') {
+      delete (payload as any).id;
+    }
+
+    const { data, error } = await supabase
+      .from('families')
+      .upsert(payload)
+      .select()
+      .single();
+    if (error) {
+      logError('saveFamily', error);
+      throw error;
+    }
+    return data as Family;
+  },
+
+  async deleteFamily(id: string): Promise<void> {
+    const { error } = await supabase.from('families').delete().eq('id', id);
+    if (error) {
+      logError('deleteFamily', error);
+      throw error;
+    }
+  },
+
+  // Events
+  async getEvents(): Promise<Event[]> {
+    const { data, error } = await supabase.from('events').select('*').order('date', { ascending: false });
+    if (error) {
+      logError('getEvents', error);
+      throw error;
+    }
+    return (data || []) as Event[];
+  },
+
+  async saveEvent(event: Event): Promise<Event> {
+    const payload = { ...event };
+    if (!payload.id || payload.id === '') {
+      delete (payload as any).id;
+    }
+
+    const { data, error } = await supabase
+      .from('events')
+      .upsert(payload)
+      .select()
+      .single();
+    if (error) {
+      logError('saveEvent', error);
+      throw error;
+    }
+    return data as Event;
+  },
+
+  // Donations
+  async getDonations(): Promise<Donation[]> {
+    const { data, error } = await supabase.from('donations').select('*').order('date', { ascending: false });
+    if (error) {
+      logError('getDonations', error);
+      throw error;
+    }
+    return (data || []) as Donation[];
+  },
+
+  async addDonation(donation: Donation): Promise<Donation> {
+    const { data, error } = await supabase
+      .from('donations')
+      .insert({ ...donation, id: undefined })
+      .select()
+      .single();
+    if (error) {
+      logError('addDonation', error);
+      throw error;
+    }
+    return data as Donation;
+  },
+
+  // Users/Profiles
+  async getUsers(): Promise<User[]> {
+    const { data, error } = await supabase.from('profiles').select('*');
+    if (error) {
+      logError('getUsers', error);
+      throw error;
+    }
+    return (data || []) as User[];
+  },
+
+  async saveUser(user: User): Promise<User> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert({ ...user, id: user.id || undefined })
+      .select()
+      .single();
+    if (error) {
+      logError('saveUser', error);
+      throw error;
+    }
+    return data as User;
+  },
+
+  async deleteUser(id: string): Promise<void> {
+    const { error } = await supabase.from('profiles').delete().eq('id', id);
+    if (error) {
+      logError('deleteUser', error);
+      throw error;
+    }
+  },
+
+  // Announcements
+  async getAnnouncements(): Promise<Announcement[]> {
+    const { data, error } = await supabase.from('announcements').select('*').order('date', { ascending: false });
+    if (error) {
+      logError('getAnnouncements', error);
+      throw error;
+    }
+    return (data || []) as Announcement[];
+  },
+
+  async saveAnnouncement(announcement: Announcement): Promise<Announcement> {
+    const payload = { ...announcement };
+    if (!payload.id || payload.id === '') {
+      delete (payload as any).id;
+    }
+
+    const { data, error } = await supabase
+      .from('announcements')
+      .upsert(payload)
+      .select()
+      .single();
+    if (error) {
+      logError('saveAnnouncement', error);
+      throw error;
+    }
+    return data as Announcement;
+  },
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    const { error } = await supabase.from('announcements').delete().eq('id', id);
+    if (error) {
+      logError('deleteAnnouncement', error);
+      throw error;
+    }
+  },
+
+  // Settings
+  async getSettings(): Promise<ChurchSettings> {
+    try {
+      const { data, error } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
+      if (error) {
+        logError('getSettings', error);
+      }
+      if (!data) {
+        return {
+          name: 'Meetcross CRM',
+          address: '',
+          currency: '$',
+          email: '',
+          phone: ''
+        };
+      }
+      return data as ChurchSettings;
+    } catch (e) {
+      return {
+        name: 'Meetcross CRM',
+        address: '',
+        currency: '$',
+        email: '',
+        phone: ''
+      };
+    }
+  },
+
+  async saveSettings(settings: ChurchSettings): Promise<void> {
+    const { error } = await supabase.from('settings').upsert({ id: 1, ...settings });
+    if (error) {
+      logError('saveSettings', error);
+      throw error;
+    }
   }
-
-  if (loading) {
-     return (
-        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50">
-            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-500 font-medium animate-pulse">Connecting to Meetcross Cloud...</p>
-        </div>
-     );
-  }
-
-  if (!user) {
-    return <Login onLogin={setUser} />;
-  }
-
-  return (
-    <HashRouter>
-      <Layout user={user} onLogout={() => setUser(null)}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/members" element={<Members />} />
-          <Route path="/families" element={<Families />} />
-          <Route path="/giving" element={<Giving />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/attendance" element={<Attendance />} />
-          <Route path="/announcements" element={<Announcements />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
-    </HashRouter>
-  );
-}
-
-export default App;
-
-
+};
