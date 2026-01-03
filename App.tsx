@@ -1,5 +1,8 @@
+
 import { useState, useEffect } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+// Split imports between core react-router and web-specific react-router-dom
+import { Routes, Route, Navigate } from 'react-router';
+import { HashRouter } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Members } from './pages/Members';
