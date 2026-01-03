@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+// Import hooks from core react-router
+import { useNavigate } from 'react-router';
 import { 
   Users, 
   Calendar, 
