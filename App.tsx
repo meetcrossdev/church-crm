@@ -70,7 +70,7 @@ function App() {
     performInitialAuth();
 
     /* Step 3: Listen for Auth State Changes */
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const profile = await storage.getCurrentUser();
         setUser(profile);
