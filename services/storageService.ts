@@ -1,213 +1,258 @@
-
 import { supabase } from './supabase';
-import { Member, Family, Event, Donation, User, ChurchSettings, Announcement, UserRole } from '../types';
+import {
+  Member,
+  Family,
+  Event,
+  Donation,
+  User,
+  ChurchSettings,
+  Announcement,
+  UserRole,
+} from '../types';
 
-const logError = (context: string, error: any) => {
-  console.error(`Supabase Error [${context}]:`, error);
+const DEFAULT_SETTINGS: ChurchSettings = {
+  name: 'Meetcross CRM',
+  address: '',
+  currency: '$',
+  email: '',
+  phone: '',
 };
 
+const avatarUrl = (name: string) =>
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+
 export const storage = {
-  // Auth & Profile
+  /* ================= AUTH ================= */
+
   async getCurrentUser(): Promise<User | null> {
-    try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) return null;
-      
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-      
-      if (profileError) {
-        logError('getCurrentUser_profile', profileError);
-        return null;
-      }
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) return null;
 
-      if (!profile) {
-        return {
-          id: user.id,
-          name: user.email ? user.email.split('@')[0] : 'User',
-          email: user.email || '',
-          role: UserRole.STAFF,
-          avatar: "https://ui-avatars.com/api/?name=" + (user.email || 'User') + "&background=random"
-        };
-      }
-        
-      return profile as User;
-    } catch (e) {
-      return null;
-    }
-  },
-
-  async login(email: string, pass: string) {
-    return await supabase.auth.signInWithPassword({ email, password: pass });
-  },
-
-  async register(email: string, pass: string, name: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: pass,
-    });
-
-    if (error) throw error;
-    if (!data.user) throw new Error("Sign up failed");
-
-    const { error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('profiles')
-      .insert({
+      .select('*')
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    if (!profile) {
+      return {
         id: data.user.id,
-        name: name,
-        email: email,
-        role: UserRole.ADMIN,
-        avatar: "https://ui-avatars.com/api/?name=" + encodeURIComponent(name) + "&background=random"
-      });
+        name: data.user.email?.split('@')[0] || 'User',
+        email: data.user.email || '',
+        role: UserRole.STAFF,
+        avatar: avatarUrl(data.user.email || 'User'),
+      };
+    }
+
+    return profile as User;
+  },
+
+  async login(email: string, password: string) {
+    return supabase.auth.signInWithPassword({ email, password });
+  },
+
+  async register(email: string, password: string, name: string) {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error || !data.user) throw error;
+
+    const { error: profileError } = await supabase.from('profiles').insert({
+      id: data.user.id,
+      name,
+      email,
+      role: UserRole.ADMIN,
+      avatar: avatarUrl(name),
+    });
 
     if (profileError) throw profileError;
     return data;
   },
 
-  async logout(): Promise<void> {
+  async logout() {
     await supabase.auth.signOut();
   },
 
-  // Members
+  /* ================= MEMBERS ================= */
+
   async getMembers(): Promise<Member[]> {
-    const { data, error } = await supabase.from('members').select('*').order('lastName');
-    if (error) { logError('getMembers', error); throw error; }
-    return (data || []) as Member[];
+    const { data, error } = await supabase
+      .from('members')
+      .select('*')
+      .order('lastName');
+
+    if (error) throw error;
+    return data ?? [];
   },
 
   async saveMember(member: Member): Promise<Member> {
-    const payload: any = { ...member };
-    if (!payload.id || payload.id.length < 5) {
-      delete payload.id;
-    }
-    
+    const payload = { ...member };
+    if (!payload.id) delete payload.id;
+
     const { data, error } = await supabase
       .from('members')
       .upsert(payload)
       .select()
       .single();
-      
-    if (error) { logError('saveMember', error); throw error; }
-    return data as Member;
+
+    if (error) throw error;
+    return data;
   },
 
-  async deleteMember(id: string): Promise<void> {
+  async deleteMember(id: string) {
     const { error } = await supabase.from('members').delete().eq('id', id);
-    if (error) { logError('deleteMember', error); throw error; }
+    if (error) throw error;
   },
 
-  // Families
+  /* ================= FAMILIES ================= */
+
   async getFamilies(): Promise<Family[]> {
     const { data, error } = await supabase.from('families').select('*');
-    if (error) { logError('getFamilies', error); throw error; }
-    return (data || []) as Family[];
+    if (error) throw error;
+    return data ?? [];
   },
 
   async saveFamily(family: Family): Promise<Family> {
-    const payload: any = { ...family };
-    if (!payload.id || payload.id.length < 5) {
-      delete payload.id;
-    }
-    const { data, error } = await supabase.from('families').upsert(payload).select().single();
+    const payload = { ...family };
+    if (!payload.id) delete payload.id;
+
+    const { data, error } = await supabase
+      .from('families')
+      .upsert(payload)
+      .select()
+      .single();
+
     if (error) throw error;
-    return data as Family;
+    return data;
   },
 
-  async deleteFamily(id: string): Promise<void> {
+  async deleteFamily(id: string) {
     const { error } = await supabase.from('families').delete().eq('id', id);
     if (error) throw error;
   },
 
-  // Events
+  /* ================= EVENTS ================= */
+
   async getEvents(): Promise<Event[]> {
-    const { data, error } = await supabase.from('events').select('*').order('date', { ascending: false });
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .order('date', { ascending: false });
+
     if (error) throw error;
-    return (data || []) as Event[];
+    return data ?? [];
   },
 
   async saveEvent(event: Event): Promise<Event> {
-    const payload: any = { ...event };
-    if (!payload.id || payload.id.length < 5) {
-      delete payload.id;
-    }
-    const { data, error } = await supabase.from('events').upsert(payload).select().single();
+    const payload = { ...event };
+    if (!payload.id) delete payload.id;
+
+    const { data, error } = await supabase
+      .from('events')
+      .upsert(payload)
+      .select()
+      .single();
+
     if (error) throw error;
-    return data as Event;
+    return data;
   },
 
-  // Donations
+  /* ================= DONATIONS ================= */
+
   async getDonations(): Promise<Donation[]> {
-    const { data, error } = await supabase.from('donations').select('*').order('date', { ascending: false });
+    const { data, error } = await supabase
+      .from('donations')
+      .select('*')
+      .order('date', { ascending: false });
+
     if (error) throw error;
-    return (data || []) as Donation[];
+    return data ?? [];
   },
 
   async addDonation(donation: Donation): Promise<Donation> {
-    const payload: any = { ...donation };
+    const payload = { ...donation };
     delete payload.id;
-    const { data, error } = await supabase.from('donations').insert(payload).select().single();
+
+    const { data, error } = await supabase
+      .from('donations')
+      .insert(payload)
+      .select()
+      .single();
+
     if (error) throw error;
-    return data as Donation;
+    return data;
   },
 
-  // Users
+  /* ================= USERS ================= */
+
   async getUsers(): Promise<User[]> {
     const { data, error } = await supabase.from('profiles').select('*');
     if (error) throw error;
-    return (data || []) as User[];
+    return data ?? [];
   },
 
   async saveUser(user: User): Promise<User> {
-    const { data, error } = await supabase.from('profiles').upsert(user).select().single();
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(user)
+      .select()
+      .single();
+
     if (error) throw error;
-    return data as User;
+    return data;
   },
 
-  async deleteUser(id: string): Promise<void> {
+  async deleteUser(id: string) {
     const { error } = await supabase.from('profiles').delete().eq('id', id);
     if (error) throw error;
   },
 
-  // Announcements
+  /* ================= ANNOUNCEMENTS ================= */
+
   async getAnnouncements(): Promise<Announcement[]> {
-    const { data, error } = await supabase.from('announcements').select('*').order('date', { ascending: false });
+    const { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('date', { ascending: false });
+
     if (error) throw error;
-    return (data || []) as Announcement[];
+    return data ?? [];
   },
 
-  async saveAnnouncement(announcement: Announcement): Promise<Announcement> {
-    const payload: any = { ...announcement };
-    if (!payload.id || payload.id.length < 5) {
-      delete payload.id;
-    }
-    const { data, error } = await supabase.from('announcements').upsert(payload).select().single();
+  async saveAnnouncement(a: Announcement): Promise<Announcement> {
+    const payload = { ...a };
+    if (!payload.id) delete payload.id;
+
+    const { data, error } = await supabase
+      .from('announcements')
+      .upsert(payload)
+      .select()
+      .single();
+
     if (error) throw error;
-    return data as Announcement;
+    return data;
   },
 
-  async deleteAnnouncement(id: string): Promise<void> {
+  async deleteAnnouncement(id: string) {
     const { error } = await supabase.from('announcements').delete().eq('id', id);
     if (error) throw error;
   },
 
-  // Settings
+  /* ================= SETTINGS ================= */
+
   async getSettings(): Promise<ChurchSettings> {
-    try {
-      const { data, error } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
-      if (error || !data) {
-        return { name: 'Meetcross CRM', address: '', currency: '$', email: '', phone: '' };
-      }
-      return data as ChurchSettings;
-    } catch (e) {
-      return { name: 'Meetcross CRM', address: '', currency: '$', email: '', phone: '' };
-    }
+    const { data } = await supabase
+      .from('settings')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle();
+
+    return data ?? DEFAULT_SETTINGS;
   },
 
-  async saveSettings(settings: ChurchSettings): Promise<void> {
-    const { error } = await supabase.from('settings').upsert({ id: 1, ...settings });
+  async saveSettings(settings: ChurchSettings) {
+    const { error } = await supabase
+      .from('settings')
+      .upsert({ id: 1, ...settings });
+
     if (error) throw error;
-  }
+  },
 };
