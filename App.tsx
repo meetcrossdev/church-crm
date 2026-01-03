@@ -45,11 +45,11 @@ function App() {
       isInitStarted.current = true;
       
       try {
-        // Step A: Check for existing session
+        // Step A: Check session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
-          console.error("Session fetch error:", sessionError);
+          console.error("Session error:", sessionError);
         }
 
         if (session?.user) {
@@ -67,7 +67,7 @@ function App() {
 
     initAuth();
 
-    // 3. Listen for state changes (Login, Logout, Session Refresh)
+    // 3. Listen for state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`Supabase Event: ${event}`);
       
@@ -80,10 +80,10 @@ function App() {
       setLoading(false);
     });
 
-    // 4. Safety Fallback: Never let the app hang forever
+    // 4. Safety Fallback: Don't hang forever (3 seconds is enough for most connections)
     const timer = setTimeout(() => {
       setLoading(false);
-    }, 5000);
+    }, 3500);
 
     return () => {
       clearTimeout(timer);
@@ -98,11 +98,6 @@ function App() {
           <AlertTriangle className="mx-auto h-16 w-16 text-red-500 mb-4" />
           <h1 className="text-xl font-bold text-slate-900 mb-2">Configuration Error</h1>
           <p className="text-slate-600 mb-6">{configError}</p>
-          <div className="text-[10px] bg-slate-50 p-3 rounded-lg text-left text-slate-400 font-mono break-all">
-            Expected env keys:<br/>
-            - VITE_SUPABASE_URL<br/>
-            - VITE_SUPABASE_ANON_KEY
-          </div>
         </div>
       </div>
     );
@@ -112,7 +107,7 @@ function App() {
      return (
         <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50">
             <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-500 font-medium animate-pulse">Connecting to Meetcross Cloud...</p>
+            <p className="text-slate-500 font-medium">Connecting to Meetcross Cloud...</p>
         </div>
      );
   }
