@@ -1,225 +1,131 @@
 
-import { supabase } from './supabase';
-import { Member, Family, Event, Donation, User, ChurchSettings, Announcement, UserRole } from '../types';
+import { useState, useEffect, useRef } from 'react';
+import { Routes, Route, Navigate } from 'react-router';
+import { HashRouter } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { Dashboard } from './pages/Dashboard';
+import { Members } from './pages/Members';
+import { Families } from './pages/Families';
+import { Giving } from './pages/Giving';
+import { Events } from './pages/Events';
+import { Attendance } from './pages/Attendance';
+import { Settings } from './pages/Settings';
+import { Announcements } from './pages/Announcements';
+import { Login } from './pages/Login';
+import { storage } from './services/storageService';
+import { User } from './types';
+import { supabase } from './services/supabase';
+import { AlertTriangle } from 'lucide-react';
 
-export const storage = {
-  // Auth
-  async getCurrentUser(): Promise<User | null> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-      
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
-      if (error || !profile) return null;
-        
-      return profile as User;
-    } catch (e) {
-      return null;
+function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const isInitialized = useRef(false);
+
+  useEffect(() => {
+    // 1. Config Check
+    const meta = import.meta as any;
+    const supabaseUrl = meta.env?.VITE_SUPABASE_URL;
+    const supabaseKey = meta.env?.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      setConfigError("Missing Supabase configuration. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setLoading(false);
+      return;
     }
-  },
 
-  async login(email: string, pass: string) {
-    return await supabase.auth.signInWithPassword({ email, password: pass });
-  },
+    // 2. Safety Fallback: Ensure loading screen eventually disappears
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn("Auth initialization taking too long, forcing load finish.");
+        setLoading(false);
+      }
+    }, 5000);
 
-  async register(email: string, pass: string, name: string) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password: pass,
+    // 3. Auth Listener & Initial Check
+    const initAuth = async () => {
+      if (isInitialized.current) return;
+      
+      try {
+        // Get current session status immediately
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const profile = await storage.getCurrentUser();
+          setUser(profile);
+        }
+      } catch (err) {
+        console.error("Auth init error:", err);
+      } finally {
+        setLoading(false);
+        isInitialized.current = true;
+      }
+    };
+
+    initAuth();
+
+    // Listen for state changes (Login, Logout, Session Refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`Auth Event: ${event}`);
+      if (session) {
+        const profile = await storage.getCurrentUser();
+        setUser(profile);
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
     });
 
-    if (error) throw error;
-    if (!data.user) throw new Error("Sign up failed");
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
+  }, []);
 
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: data.user.id,
-        name,
-        email,
-        role: UserRole.ADMIN,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
-      });
-
-    if (profileError) throw profileError;
-
-    return data;
-  },
-
-  async logout(): Promise<void> {
-    await supabase.auth.signOut();
-  },
-
-  // Members
-  async getMembers(): Promise<Member[]> {
-    const { data, error } = await supabase.from('members').select('*').order('lastName');
-    if (error) throw error;
-    return (data || []) as Member[];
-  },
-
-  async saveMember(member: Member): Promise<Member> {
-    const payload = { ...member };
-    if (!payload.id) delete (payload as any).id;
-    
-    const { data, error } = await supabase
-      .from('members')
-      .upsert(payload)
-      .select()
-      .single();
-    if (error) throw error;
-    return data as Member;
-  },
-
-  async deleteMember(id: string): Promise<void> {
-    const { error } = await supabase.from('members').delete().eq('id', id);
-    if (error) throw error;
-  },
-
-  // Families
-  async getFamilies(): Promise<Family[]> {
-    const { data, error } = await supabase.from('families').select('*');
-    if (error) throw error;
-    return (data || []) as Family[];
-  },
-
-  async saveFamily(family: Family): Promise<Family> {
-    const payload = { ...family };
-    if (!payload.id) delete (payload as any).id;
-
-    const { data, error } = await supabase
-      .from('families')
-      .upsert(payload)
-      .select()
-      .single();
-    if (error) throw error;
-    return data as Family;
-  },
-
-  async deleteFamily(id: string): Promise<void> {
-    const { error } = await supabase.from('families').delete().eq('id', id);
-    if (error) throw error;
-  },
-
-  // Events
-  async getEvents(): Promise<Event[]> {
-    const { data, error } = await supabase.from('events').select('*').order('date', { ascending: false });
-    if (error) throw error;
-    return (data || []) as Event[];
-  },
-
-  async saveEvent(event: Event): Promise<Event> {
-    const payload = { ...event };
-    if (!payload.id) delete (payload as any).id;
-
-    const { data, error } = await supabase
-      .from('events')
-      .upsert(payload)
-      .select()
-      .single();
-    if (error) throw error;
-    return data as Event;
-  },
-
-  // Donations
-  async getDonations(): Promise<Donation[]> {
-    const { data, error } = await supabase.from('donations').select('*').order('date', { ascending: false });
-    if (error) throw error;
-    return (data || []) as Donation[];
-  },
-
-  async addDonation(donation: Donation): Promise<Donation> {
-    const { data, error } = await supabase
-      .from('donations')
-      .insert({ ...donation, id: undefined })
-      .select()
-      .single();
-    if (error) throw error;
-    return data as Donation;
-  },
-
-  // Users/Profiles
-  async getUsers(): Promise<User[]> {
-    const { data, error } = await supabase.from('profiles').select('*');
-    if (error) throw error;
-    return (data || []) as User[];
-  },
-
-  async saveUser(user: User): Promise<User> {
-    const { data, error } = await supabase
-      .from('profiles')
-      .upsert({ ...user, id: user.id || undefined })
-      .select()
-      .single();
-    if (error) throw error;
-    return data as User;
-  },
-
-  async deleteUser(id: string): Promise<void> {
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (error) throw error;
-  },
-
-  // Announcements
-  async getAnnouncements(): Promise<Announcement[]> {
-    const { data, error } = await supabase.from('announcements').select('*').order('date', { ascending: false });
-    if (error) throw error;
-    return (data || []) as Announcement[];
-  },
-
-  async saveAnnouncement(announcement: Announcement): Promise<Announcement> {
-    const payload = { ...announcement };
-    if (!payload.id) delete (payload as any).id;
-
-    const { data, error } = await supabase
-      .from('announcements')
-      .upsert(payload)
-      .select()
-      .single();
-    if (error) throw error;
-    return data as Announcement;
-  },
-
-  /**
-   * Deletes an announcement by its ID.
-   */
-  async deleteAnnouncement(id: string): Promise<void> {
-    const { error } = await supabase.from('announcements').delete().eq('id', id);
-    if (error) throw error;
-  },
-
-  // Settings
-  async getSettings(): Promise<ChurchSettings> {
-    try {
-      const { data, error } = await supabase.from('settings').select('*').eq('id', 1).maybeSingle();
-      if (error || !data) {
-        return {
-          name: 'Meetcross CRM',
-          address: '',
-          currency: '$',
-          email: '',
-          phone: ''
-        };
-      }
-      return data as ChurchSettings;
-    } catch (e) {
-      return {
-        name: 'Meetcross CRM',
-        address: '',
-        currency: '$',
-        email: '',
-        phone: ''
-      };
-    }
-  },
-
-  async saveSettings(settings: ChurchSettings): Promise<void> {
-    const { error } = await supabase.from('settings').upsert({ id: 1, ...settings });
-    if (error) throw error;
+  if (configError) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-red-50 p-6 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border border-red-100">
+          <AlertTriangle className="mx-auto h-16 w-16 text-red-500 mb-4" />
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Configuration Error</h1>
+          <p className="text-slate-600 mb-6">{configError}</p>
+        </div>
+      </div>
+    );
   }
-};
+
+  if (loading) {
+     return (
+        <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50">
+            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="text-slate-500 font-medium animate-pulse">Connecting to Meetcross Cloud...</p>
+        </div>
+     );
+  }
+
+  if (!user) {
+    return <Login onLogin={setUser} />;
+  }
+
+  return (
+    <HashRouter>
+      <Layout user={user} onLogout={() => setUser(null)}>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/members" element={<Members />} />
+          <Route path="/families" element={<Families />} />
+          <Route path="/giving" element={<Giving />} />
+          <Route path="/events" element={<Events />} />
+          <Route path="/attendance" element={<Attendance />} />
+          <Route path="/announcements" element={<Announcements />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+    </HashRouter>
+  );
+}
+
+export default App;
+
 
