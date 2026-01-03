@@ -1,5 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+// Split imports between core react-router and web-specific react-router-dom
+import { useNavigate, useLocation } from 'react-router';
+import { NavLink, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -127,7 +130,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
           </nav>
 
           <div className="border-t border-slate-100 pt-4">
-            <div className="flex items-center px-4 mb-4">
+            <Link 
+              to="/settings"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center px-4 py-2 mb-4 hover:bg-slate-50 rounded-lg transition-colors"
+            >
               <img 
                 src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`} 
                 alt="Profile" 
@@ -137,7 +144,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
                 <p className="text-sm font-medium text-slate-900 truncate">{user.name}</p>
                 <p className="text-xs text-slate-500 truncate">{user.role}</p>
               </div>
-            </div>
+            </Link>
             <button
               onClick={handleLogout}
               className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
