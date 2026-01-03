@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 // Accessing environment variables via process.env which is the standard in this environment
