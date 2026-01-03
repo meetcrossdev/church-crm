@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Save, User as UserIcon, Building, Plus, Trash2, Edit2, X, Upload } from 'lucide-react';
+import { Save, User as UserIcon, Building, Plus, Trash2, Edit2, X, Upload, AlertCircle } from 'lucide-react';
 import { storage } from '../services/storageService';
 import { ChurchSettings, User, UserRole } from '../types';
 
@@ -8,6 +8,7 @@ export const Settings: React.FC = () => {
   const [settings, setSettings] = useState<ChurchSettings | null>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'users'>('profile');
   const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
   
   // Profile Logo State
   const [logoPreview, setLogoPreview] = useState<string | undefined>(undefined);
@@ -32,6 +33,8 @@ export const Settings: React.FC = () => {
         setUsers(u);
         setCurrentUser(curr);
         setLogoPreview(s.logoUrl);
+      } catch (err) {
+        console.error("Settings load error:", err);
       } finally {
         setLoading(false);
       }
@@ -63,8 +66,7 @@ export const Settings: React.FC = () => {
 
   const handleSaveSettings = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!settings) return;
-
+      setErrorMsg('');
       const formData = new FormData(e.currentTarget);
       const newSettings: ChurchSettings = {
           name: formData.get('name') as string,
@@ -72,12 +74,17 @@ export const Settings: React.FC = () => {
           email: formData.get('email') as string,
           phone: formData.get('phone') as string,
           currency: formData.get('currency') as string,
-          logoUrl: logoPreview || settings.logoUrl
+          logoUrl: logoPreview || settings?.logoUrl
       };
-      await storage.saveSettings(newSettings);
-      setSettings(newSettings);
-      setSuccessMsg('Settings saved successfully!');
-      setTimeout(() => setSuccessMsg(''), 3000);
+
+      try {
+        await storage.saveSettings(newSettings);
+        setSettings(newSettings);
+        setSuccessMsg('Settings saved successfully!');
+        setTimeout(() => setSuccessMsg(''), 3000);
+      } catch (err: any) {
+        setErrorMsg('Failed to save settings: ' + err.message);
+      }
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -86,9 +93,13 @@ export const Settings: React.FC = () => {
           return;
       }
       if (confirm('Are you sure you want to delete this user?')) {
-          await storage.deleteUser(id);
-          const updated = await storage.getUsers();
-          setUsers(updated);
+          try {
+            await storage.deleteUser(id);
+            const updated = await storage.getUsers();
+            setUsers(updated);
+          } catch (err: any) {
+            alert('Error deleting user: ' + err.message);
+          }
       }
   };
 
@@ -105,12 +116,16 @@ export const Settings: React.FC = () => {
           avatar: userAvatarPreview || editingUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.get('name') as string)}&background=random`
       };
 
-      await storage.saveUser(newUser);
-      const updated = await storage.getUsers();
-      setUsers(updated);
-      setIsUserModalOpen(false);
-      setEditingUser(null);
-      setUserAvatarPreview(undefined);
+      try {
+        await storage.saveUser(newUser);
+        const updated = await storage.getUsers();
+        setUsers(updated);
+        setIsUserModalOpen(false);
+        setEditingUser(null);
+        setUserAvatarPreview(undefined);
+      } catch (err: any) {
+        alert('Error saving user: ' + err.message);
+      }
   };
 
   const openUserModal = (user?: User) => {
@@ -119,7 +134,13 @@ export const Settings: React.FC = () => {
       setIsUserModalOpen(true);
   };
 
-  if (loading || !settings) return null;
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center p-12">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -147,6 +168,13 @@ export const Settings: React.FC = () => {
           </button>
       </div>
 
+      {errorMsg && (
+        <div className="p-4 bg-red-50 text-red-700 rounded-lg flex items-center border border-red-100">
+          <AlertCircle size={20} className="mr-2" />
+          {errorMsg}
+        </div>
+      )}
+
       {activeTab === 'profile' && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 max-w-2xl animate-fade-in">
               <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center">
@@ -155,7 +183,6 @@ export const Settings: React.FC = () => {
               </h2>
               
               <form onSubmit={handleSaveSettings} className="space-y-4">
-                  {/* Logo Upload */}
                   <div className="flex items-center space-x-4 mb-4">
                       <div className="relative group">
                           <div className="w-20 h-20 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center bg-slate-50 overflow-hidden">
@@ -178,28 +205,28 @@ export const Settings: React.FC = () => {
 
                   <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Church Name</label>
-                      <input required name="name" defaultValue={settings.name} type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
+                      <input required name="name" defaultValue={settings?.name || ''} type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
                   </div>
                   
                   <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                      <textarea required name="address" defaultValue={settings.address} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
+                      <textarea required name="address" defaultValue={settings?.address || ''} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                       <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1">Contact Email</label>
-                          <input required name="email" defaultValue={settings.email} type="email" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
+                          <input required name="email" defaultValue={settings?.email || ''} type="email" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
                       </div>
                       <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
-                          <input required name="phone" defaultValue={settings.phone} type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
+                          <input required name="phone" defaultValue={settings?.phone || ''} type="text" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
                       </div>
                   </div>
 
                    <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Currency Symbol</label>
-                      <input required name="currency" defaultValue={settings.currency} type="text" className="w-full md:w-1/3 px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
+                      <input required name="currency" defaultValue={settings?.currency || '$'} type="text" className="w-full md:w-1/3 px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" />
                   </div>
 
                   <div className="pt-4 flex items-center justify-between">
@@ -265,7 +292,6 @@ export const Settings: React.FC = () => {
           </div>
       )}
 
-      {/* User Modal */}
       {isUserModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 backdrop-blur-sm">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in">
@@ -276,12 +302,10 @@ export const Settings: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleSaveUser} className="p-6 space-y-4">
-              
-              {/* User Avatar Upload */}
               <div className="flex justify-center mb-4">
                   <div className="relative">
                       <img 
-                        src={userAvatarPreview || editingUser?.avatar || "https://via.placeholder.com/100"} 
+                        src={userAvatarPreview || editingUser?.avatar || "https://ui-avatars.com/api/?name=User&background=f1f5f9"} 
                         className="w-20 h-20 rounded-full object-cover border-2 border-slate-200"
                         alt="User Preview"
                       />
@@ -309,18 +333,6 @@ export const Settings: React.FC = () => {
                           <option key={role} value={role}>{role}</option>
                       ))}
                   </select>
-              </div>
-
-              <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                      {editingUser ? 'New Password (leave blank to keep current)' : 'Password'}
-                  </label>
-                  <input 
-                    name="password" 
-                    type="password" 
-                    required={!editingUser}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500" 
-                  />
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
